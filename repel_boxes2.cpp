@@ -1,0 +1,614 @@
+#include <Rcpp.h>
+#include <deque>
+using namespace Rcpp;
+
+// Exported convenience functions ---------------------------------------------
+
+//' Euclidean distance between two points.
+//' @param a A numeric vector.
+//' @param b A numeric vector.
+//' @return The distance between two points.
+//' @noRd
+// [[Rcpp::export]]
+double euclid(NumericVector a, NumericVector b) {
+  return sqrt(
+    (a[0] - b[0]) * (a[0] - b[0]) +
+      (a[1] - b[1]) * (a[1] - b[1])
+  );
+}
+
+//' Get the coordinates of the center of a box.
+//' @param b A box like \code{c(x1, y1, x2, y2)}
+//' @noRd
+// [[Rcpp::export]]
+NumericVector centroid(NumericVector b) {
+  return NumericVector::create((b[0] + b[2]) / 2, (b[1] + b[3]) / 2);
+}
+
+//' Find the intersections between a line and a rectangle.
+//' @param p1 A point like \code{c(x, y)}
+//' @param p2 A point like \code{c(x, y)}
+//' @param b A rectangle like \code{c(x1, y1, x2, y2)}
+//' @noRd
+// [[Rcpp::export]]
+NumericVector intersect_line_rectangle(
+    NumericVector p1, NumericVector p2, NumericVector b
+) {
+  double slope = (p2[1] - p1[1]) / std::max(p2[0] - p1[0], 0.0004);
+  double intercept = p2[1] - p2[0] * slope;
+  NumericMatrix retval(4, 2);
+  std::fill(retval.begin(), retval.end(), -INFINITY);
+
+  double x, y;
+
+  x = b[0];
+  y = slope * x + intercept;
+  if (b[1] <= y && y <= b[3]) {
+    retval(0, _) = NumericVector::create(x, y);
+  }
+
+  x = b[2];
+  y = slope * x + intercept;
+  if (b[1] <= y && y <= b[3]) {
+    retval(1, _) = NumericVector::create(x, y);
+  }
+
+  y = b[1];
+  x = (y - intercept) / slope;
+  if (b[0] <= x && x <= b[2]) {
+    retval(2, _) = NumericVector::create(x, y);
+  }
+
+  y = b[3];
+  x = (y - intercept) / slope;
+  if (b[0] <= x && x <= b[2]) {
+    retval(3, _) = NumericVector::create(x, y);
+  }
+
+  int i = 0;
+  int imin = 0;
+  double d;
+  double dmin = INFINITY;
+  for (i = 0; i < 4; i++) {
+    d = euclid(retval(i, _), p1);
+    // Rcout << i << " euclid = " << d << std::endl;
+    if (d < dmin) {
+      dmin = d;
+      imin = i;
+    }
+  }
+
+  return retval(imin, _);
+}
+
+// Main code for text label placement -----------------------------------------
+
+typedef struct {
+  double x, y;
+} Point;
+
+Point operator -(const Point& a, const Point& b) {
+  Point p = {a.x - b.x, a.y - b.y};
+  return p;
+}
+
+Point operator +(const Point& a, const Point& b) {
+  Point p = {a.x + b.x, a.y + b.y};
+  return p;
+}
+
+Point operator /(const Point& a, const double& b) {
+  Point p = {a.x / b, a.y / b};
+  return p;
+}
+
+Point operator *(const double& b, const Point& a) {
+  Point p = {a.x * b, a.y * b};
+  return p;
+}
+
+Point operator *(const Point& a, const double& b) {
+  Point p = {a.x * b, a.y * b};
+  return p;
+}
+
+typedef struct {
+  double x1, y1, x2, y2;
+} Box;
+
+Box operator +(const Box& b, const Point& p) {
+  Box c = {b.x1 + p.x, b.y1 + p.y, b.x2 + p.x, b.y2 + p.y};
+  return c;
+}
+
+//' Euclidean distance between two points.
+//' @param a A point.
+//' @param b A point.
+//' @return The distance between two points.
+//' @noRd
+double euclid(Point a, Point b) {
+  Point dist = a - b;
+  return sqrt(dist.x * dist.x + dist.y * dist.y);
+}
+
+//' Squared Euclidean distance between two points.
+//' @param a A point.
+//' @param b A point.
+//' @return The distance between two points.
+//' @noRd
+double euclid2(Point a, Point b) {
+  Point dist = a - b;
+  return dist.x * dist.x + dist.y * dist.y;
+}
+
+//' Move a box into the area specificied by x limits and y limits.
+//' @param b A box like \code{c(x1, y1, x2, y2)}
+//' @param xlim A Point with limits on the x axis like \code{c(xmin, xmax)}
+//' @param ylim A Point with limits on the y axis like \code{c(xmin, xmax)}
+//' @param force Magnitude of the force (defaults to \code{1e-6})
+//' @noRd
+Box put_within_bounds(Box b, Point xlim, Point ylim, double force = 1e-5) {
+  //double d;
+  //if (b.x1 < xlim.x) {
+  //  d = std::max(fabs(b.x1 - xlim.x), 0.02);
+  //  b.x1 += force / pow(d, 2);
+  //  b.x2 += force / pow(d, 2);
+  //} else if (b.x2 > xlim.y) {
+  //  d = std::max(fabs(b.x2 - xlim.y), 0.02);
+  //  b.x1 -= force / pow(d, 2);
+  //  b.x2 -= force / pow(d, 2);
+  //}
+  //if (b.y1 < ylim.x) {
+  //  d = std::max(fabs(b.y1 - ylim.x), 0.02);
+  //  b.y1 += force / pow(d, 2);
+  //  b.y2 += force / pow(d, 2);
+  //} else if (b.y2 > ylim.y) {
+  //  d = std::max(fabs(b.y2 - ylim.y), 0.02);
+  //  b.y1 -= force / pow(d, 2);
+  //  b.y2 -= force / pow(d, 2);
+  //}
+  double width = fabs(b.x1 - b.x2);
+  double height = fabs(b.y1 - b.y2);
+  if (b.x1 < xlim.x) {
+    b.x1 = xlim.x;
+    b.x2 = b.x1 + width;
+  } else if (b.x2 > xlim.y) {
+    b.x2 = xlim.y;
+    b.x1 = b.x2 - width;
+  }
+  if (b.y1 < ylim.x) {
+    b.y1 = ylim.x;
+    b.y2 = b.y1 + height;
+  } else if (b.y2 > ylim.y) {
+    b.y2 = ylim.y;
+    b.y1 = b.y2 - height;
+  }
+  return b;
+}
+
+//' Get the coordinates of the center of a box.
+//' @param b A box like \code{c(x1, y1, x2, y2)}
+//' @noRd
+Point centroid(Box b) {
+  Point p = {(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2};
+  return p;
+}
+
+//' Test if a box overlaps another box.
+//' @param a A box like \code{c(x1, y1, x2, y2)}
+//' @param b A box like \code{c(x1, y1, x2, y2)}
+//' @noRd
+bool overlaps(Box a, Box b) {
+  return
+    b.x1 <= a.x2 && 
+    b.y1 <= a.y2 && // If one rectangle is on left side of other
+    b.x2 >= a.x1 &&
+    b.y2 >= a.y1; // If one rectangle is above other
+}
+
+
+
+Point repel_force_both(
+    Point a, Point b, double force = 0.000001
+) {
+  double dx = fabs(a.x - b.x);
+  double dy = fabs(a.y - b.y);
+  // Constrain the minimum distance, so it is never 0.
+  double d2 = std::max(dx * dx + dy * dy, 0.0004);
+  // Compute a unit vector in the direction of the force.
+  Point v = (a - b) / sqrt(d2);
+  // Divide the force by the squared distance.
+  Point f = force * v / d2;
+  if (dx > dy) {
+    // f.y = f.y * dx / dy;
+    f.y = f.y * 2;
+  } else {
+    // f.x = f.x * dy / dx;
+    f.x = f.x * 2;
+  }
+  return f;
+}
+
+
+Point repel_force_y(
+    Point a, Point b, double force = 0.000001
+) {
+  double dx = fabs(a.x - b.x);
+  double dy = fabs(a.y - b.y);
+  // Constrain the minimum distance, so it is never 0.
+  double d2 = std::max(dx * dx + dy * dy, 0.0004);
+  // Compute a unit vector in the direction of the force.
+  Point v = {0, (a.y - b.y) / sqrt(d2)};
+  // Divide the force by the squared distance.
+  Point f = force * v / d2 * 2;
+  return f;
+}
+
+Point repel_force_x(
+    Point a, Point b, double force = 0.000001
+) {
+  double dx = fabs(a.x - b.x);
+  double dy = fabs(a.y - b.y);
+  // Constrain the minimum distance, so it is never 0.
+  double d2 = std::max(dx * dx + dy * dy, 0.0004);
+  // Compute a unit vector in the direction of the force.
+  Point v = {(a.x - b.x) / sqrt(d2), 0};
+  // Divide the force by the squared distance.
+  Point f = force * v / d2 * 2;
+  return f;
+}
+
+//' Compute the repulsion force upon point \code{a} from point \code{b}.
+//'
+//' The force decays with the squared distance between the points, similar
+//' to the force of repulsion between magnets.
+//'
+//' @param a A point like \code{c(x, y)}
+//' @param b A point like \code{c(x, y)}
+//' @param force Magnitude of the force (defaults to \code{1e-6})
+//' @param direction direction in which to exert force, either "both", "x", or "y"
+//' @noRd
+Point repel_force(
+    Point a, Point b, double force = 0.000001, std::string direction = "both"
+) {
+  Point out;
+  if (direction == "x"){
+    out = repel_force_x(a, b, force);
+  } else if (direction == "y"){
+    out = repel_force_y(a, b, force);
+  } else{
+    out = repel_force_both(a, b, force);
+  }
+  return out;
+}
+
+
+
+Point spring_force_both(
+    Point a, Point b, double force = 0.000001
+) {
+  double dx = fabs(a.x - b.x);
+  double dy = fabs(a.y - b.y);
+  double d = sqrt(dx * dx + dy * dy);
+  Point f = {0, 0};
+  if (d > 0.02) {
+    // Compute a unit vector in the direction of the force.
+    Point v = (a - b) / d;
+    f = force * v * d;
+    if (dx < dy) {
+      f.y = f.y * 1.5;
+      f.x = f.x * 0.5;
+    } else {
+      f.y = f.y * 0.5;
+      f.x = f.x * 1.5;
+    }
+  }
+  return f;
+}
+
+Point spring_force_y(
+    Point a, Point b, double force = 0.000001
+) {
+  double dx = fabs(a.x - b.x);
+  double dy = fabs(a.y - b.y);
+  double d = sqrt(dx * dx + dy * dy);
+  Point f = {0, 0};
+  if (d > 0.02) {
+    // Compute a unit vector in the direction of the force.
+    Point v = {0, (a.y - b.y) / d};
+    f = force * v * d;
+    f.y = f.y * 1.5;
+  }
+  return f;
+}
+
+Point spring_force_x(
+    Point a, Point b, double force = 0.000001
+) {
+  double dx = fabs(a.x - b.x);
+  double dy = fabs(a.y - b.y);
+  double d = sqrt(dx * dx + dy * dy);
+  Point f = {0, 0};
+  if (d > 0.02) {
+    // Compute a unit vector in the direction of the force.
+    Point v = {(a.x - b.x) / d, 0};
+    f = force * v * d;
+    f.x = f.x * 1.5;
+  }
+  return f;
+}
+
+//' Compute the spring force upon point \code{a} from point \code{b}.
+//'
+//' The force increases with the distance between the points, similar
+//' to Hooke's law for springs.
+//'
+//' @param a A point like \code{c(x, y)}
+//' @param b A point like \code{c(x, y)}
+//' @param force Magnitude of the force (defaults to \code{1e-6})
+//' @param direction direction in which to exert force, either "both", "x", or "y"
+//' @noRd
+Point spring_force(
+    Point a, Point b, double force = 0.000001, std::string direction = "both"
+) {
+  Point out;
+  if (direction == "x"){
+    out = spring_force_x(a, b, force);
+  } else if (direction == "y"){
+    out = spring_force_y(a, b, force);
+  } else{
+    out = spring_force_both(a, b, force);
+  }
+  return out;
+}
+
+
+
+
+
+//' Adjust the layout of a list of potentially overlapping boxes.
+//' @param data_points A numeric matrix with rows representing points like
+//'   \code{rbind(c(x, y), c(x, y), ...)}
+//' @param point_padding_x Padding around each data point on the x axis. <<<<<<_@AG:_delete it as we always need less movement from the data_point!
+//' @param point_padding_y Padding around each data point on the y axis. <<<<<<_@AG:_the same
+//' @param boxes A numeric matrix with rows representing boxes like
+//'   \code{rbind(c(x1, y1, x2, y2), c(x1, y1, x2, y2), ...)}
+//' @param xlim A numeric vector representing the limits on the x axis like <<<<<<_@AG:_do we need it?
+//'   \code{c(xmin, xmax)}
+//' @param ylim A numeric vector representing the limits on the y axis like <<<<<<_@AG:_do we need it?
+//'   \code{c(ymin, ymax)}
+//' @param force Magnitude of the force (defaults to \code{1e-6})
+//' @param maxiter Maximum number of iterations to try to resolve overlaps
+//'   (defaults to 2000)
+//' @noRd
+// [[Rcpp::export]]
+
+DataFrame repel_boxes2(
+    NumericMatrix data_points,
+    // double point_padding_x, double point_padding_y,
+    NumericMatrix nlabel_boxes,
+    NumericMatrix edge_list,
+    NumericMatrix elabel_boxes,
+    NumericVector xlim, NumericVector ylim,
+    double force = 1e-6, int maxiter = 2000,
+    std::string direction = "both"
+) {
+  int n_points = nlabel_boxes.nrow();
+  int e_points = elabel_boxes.nrow();
+  // int total_points = n_points + e_points;
+  // int n_texts = boxes.nrow();
+  // assert(n_points >= n_texts); <<<<<<_@AG:_commented by slowkow
+  int iter = 0;
+  bool any_overlaps = true;
+
+  if (NumericVector::is_na(force)) {
+    force = 1e-6;
+  }
+
+  Point xbounds, ybounds;
+  xbounds.x = xlim[0];
+  xbounds.y = xlim[1];
+  ybounds.x = ylim[0];
+  ybounds.y = ylim[1];
+
+  // Each data point gets a bounding box. <<<<<<_@AG:_ (=Points)
+  std::vector<Box> DataBoxes(n_points);
+  for (int i = 0; i < n_points; i++) {
+    DataBoxes[i].x1 = data_points(i, 0); //- point_padding_x;
+    DataBoxes[i].y1 = data_points(i, 1); //- point_padding_y;
+    DataBoxes[i].x2 = data_points(i, 0); //+ point_padding_x;
+    DataBoxes[i].y2 = data_points(i, 1); //+ point_padding_y;
+  }
+
+  std::vector<Point> Points(n_points); // <<<<<<_@AG:_actually, it's the same as above, can delete DataBoxes (if it doesn't break anything)
+  for (int i = 0; i < n_points; i++) {
+    Points[i].x = data_points(i, 0);
+    Points[i].y = data_points(i, 1);
+  }
+
+  // Add a tiny bit of jitter to each text box at the start.
+  NumericVector r = rnorm(n_points, 0, force);
+  // std::vector<Box> TextBoxes(n_texts); // 0
+  std::vector<Box> NodeBoxes(n_points); 
+  std::vector<double> nratios(n_points);
+  std::vector<Point> noriginal_centroids(n_points);
+
+  std::vector<Box> EdgeBoxes(n_points); 
+  std::vector<double> eratios(n_points);
+  std::vector<Point> eoriginal_centroids(n_points);
+
+
+  for (int i = 0; i < n_points; i++) {
+    NodeBoxes[i].x1 = nlabel_boxes(i, 0);
+    NodeBoxes[i].x2 = nlabel_boxes(i, 2);
+    NodeBoxes[i].y1 = nlabel_boxes(i, 1);
+    NodeBoxes[i].y2 = nlabel_boxes(i, 3);
+  
+    // Don't add jitter if the user wants to repel in just one direction.
+    if (direction != "y") {
+      NodeBoxes[i].x1 += r[i];
+      NodeBoxes[i].x2 += r[i];
+    }
+    if (direction != "x") {
+      NodeBoxes[i].y1 += r[i];
+      NodeBoxes[i].y2 += r[i];
+    }
+    // height over width
+    nratios[i] = (NodeBoxes[i].y2 - NodeBoxes[i].y1)  
+      / (NodeBoxes[i].x2 - NodeBoxes[i].x1);
+    noriginal_centroids[i] = centroid(NodeBoxes[i]); 
+  }
+
+
+  for (int i = 0; i < e_points; i++) {
+    EdgeBoxes[i].x1 = elabel_boxes(i, 0);
+    EdgeBoxes[i].x2 = elabel_boxes(i, 2);
+    EdgeBoxes[i].y1 = elabel_boxes(i, 1);
+    EdgeBoxes[i].y2 = elabel_boxes(i, 3);
+    
+    // Don't add jitter if the user wants to repel in just one direction.
+    if (direction != "y") {
+      EdgeBoxes[i].x1 += r[i];
+      EdgeBoxes[i].x2 += r[i];
+    }
+    if (direction != "x") {
+      EdgeBoxes[i].y1 += r[i];
+      EdgeBoxes[i].y2 += r[i];
+    }
+    // height over width
+    eratios[i] = (EdgeBoxes[i].y2 - EdgeBoxes[i].y1)
+      / (EdgeBoxes[i].x2 - EdgeBoxes[i].x1);
+    eoriginal_centroids[i] = centroid(EdgeBoxes[i]); 
+  }
+
+
+
+
+
+
+  // <<<<<<_@AG:_
+  // cycle for n_texts was deleted 
+  // ________?_______ >> if (i == j) // Skip the data points if the padding is 0.
+  //                     if (point_padding_x == 0 && point_padding_y == 0) {continue}
+
+  Point f, ci, cj, ef, eci, ecj, bf, bci, bcj;
+
+  while (any_overlaps && iter < maxiter) {
+    iter += 1;
+    any_overlaps = false;
+
+
+    // NODE_LABELS
+    for (int i = 0; i < n_points; i++) {
+      f.x = 0;
+      f.y = 0;
+      ci = centroid(NodeBoxes[i]);
+
+      for (int j = i + 1; j < n_points; j++) {
+
+        // Repel the box from overlapping boxes.
+        if (overlaps(NodeBoxes[i], NodeBoxes[j])) {
+          any_overlaps = true;
+          cj = centroid(NodeBoxes[j]);
+          f = f + repel_force(ci, cj, force * 3, direction);
+          }
+
+        // Repel the box from other data points. // <<<<<<_@AG:_because we will change the position of other nodes
+        // if (overlaps(NodeBoxes[i], DataBoxes[j])) {
+        //    any_overlaps = true;
+        //    f = f + repel_force(ci, Points[j], force, direction);
+        }
+
+      if (!any_overlaps) {
+        f = f + spring_force(noriginal_centroids[i], ci, force * 2e3, direction);
+        }
+
+      // Dampen the forces.
+      f = f * (1 - 1e-3);
+
+      NodeBoxes[i] = NodeBoxes[i] + f;
+      NodeBoxes[i] = put_within_bounds(NodeBoxes[i], xbounds, ybounds);
+      }
+
+
+
+    // EDGE_LABELS
+    for (int i = 0; i < e_points; i++) {
+      ef.x = 0;
+      ef.y = 0;
+
+      eci = centroid(EdgeBoxes[i]);
+
+      for (int j = i + 1; j < e_points; j++) {
+
+        // Repel the box from overlapping boxes.
+        if (overlaps(EdgeBoxes[i], EdgeBoxes[j])) {
+          any_overlaps = true;
+          ecj = centroid(EdgeBoxes[j]);
+          ef = ef + repel_force(eci, ecj, force * 3, direction);
+          }
+        }
+
+
+      if (!any_overlaps) {
+        ef = ef + spring_force(eoriginal_centroids[i], eci, force * 2e3, direction); 
+        }
+
+      // Dampen the forces.
+      ef = ef * (1 - 1e-3);
+
+      NodeBoxes[edge_list(i, 0)] = NodeBoxes[edge_list(i, 0)] + ef; // <<<<<<_@AG:_apply to start = 1st col
+      NodeBoxes[edge_list(i, 1)] = NodeBoxes[edge_list(i, 1)] + ef; // <<<<<<_@AG:_apply to end = 2d col
+      NodeBoxes[edge_list(i, 0)] = put_within_bounds(NodeBoxes[edge_list(i, 0)], xbounds, ybounds); // <<<<<<_@AG:_1st
+      NodeBoxes[edge_list(i, 1)] = put_within_bounds(NodeBoxes[edge_list(i, 1)], xbounds, ybounds); // <<<<<<_@AG:_2d
+      }
+
+
+
+    // NODE and EDGE LABELS
+    for (int i = 0; i < n_points; i++) {
+      bf.x = 0;
+      bf.y = 0;
+      bci = centroid(NodeBoxes[i]);
+
+      for (int j = 0; j < e_points; j++) {
+
+        // Repel the box from overlapping boxes.
+        if (overlaps(NodeBoxes[i], EdgeBoxes[j])) {
+          any_overlaps = true;
+          bcj = centroid(EdgeBoxes[j]);
+          bf = bf + repel_force(bci, bcj, force * 3, direction);
+          }
+        }
+
+      if (!any_overlaps) {
+        bf = bf + spring_force(noriginal_centroids[i], bci, force * 2e3, direction);
+        }
+
+      // Dampen the forces.
+      bf = bf * (1 - 1e-3);
+
+      NodeBoxes[i] = NodeBoxes[i] + bf;
+      NodeBoxes[i] = put_within_bounds(NodeBoxes[i], xbounds, ybounds);
+      }
+    }
+
+
+
+
+
+
+  NumericVector xs(n_points);
+  NumericVector ys(n_points);
+
+  for (int i = 0; i < n_points; i++) {
+    xs[i] = (NodeBoxes[i].x1 + NodeBoxes[i].x2) / 2;
+    ys[i] = (NodeBoxes[i].y1 + NodeBoxes[i].y2) / 2;
+  }
+
+  return Rcpp::DataFrame::create(
+    Rcpp::Named("x") = xs,
+    Rcpp::Named("y") = ys
+  );
+
+}
