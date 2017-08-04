@@ -383,7 +383,7 @@ DataFrame repel_boxes(
     double point_padding_x, double point_padding_y,
     NumericMatrix boxes,
     NumericVector xlim, NumericVector ylim,
-    double force = 1, int maxiter = 2000,
+    double force = 0.1, int maxiter = 8000,
     std::string direction = "both"
 ) {
   int n_points = data_points.nrow();
@@ -393,7 +393,7 @@ DataFrame repel_boxes(
   bool any_overlaps = true;
 
   if (NumericVector::is_na(force)) {
-    force = 1e-6;
+    force = 0.1;
   }
 
   Point xbounds, ybounds;
@@ -471,7 +471,7 @@ DataFrame repel_boxes(
           if (j < n_texts && overlaps(TextBoxes[i], TextBoxes[j])) {
             any_overlaps = true;
             cj = centroid(TextBoxes[j]);
-            f = f + repel_force(ci, cj, force * 3, direction);
+            f = f + repel_force(ci, cj, force * 15, direction);
           }
           // Skip the data points if the padding is 0.
           if (point_padding_x == 0 && point_padding_y == 0) {
@@ -487,7 +487,7 @@ DataFrame repel_boxes(
 
       // Pull the box toward its original position.
       if (!any_overlaps) {
-        f = f + spring_force(original_centroids[i], ci, force * 2e3, direction);
+        f = f + spring_force(original_centroids[i], ci, force * 20, direction);
       }
 
       // Dampen the forces.
@@ -538,7 +538,7 @@ DataFrame repel_boxes2(
     NumericMatrix edge_list,
     NumericMatrix elabel_boxes,
     NumericVector xlim, NumericVector ylim,
-    double force = 1e-6, int maxiter = 2000,
+    double force = 0.1, int maxiter = 8000,
     std::string direction = "both"
 ) {
   int n_points = nlabel_boxes.nrow();
@@ -550,7 +550,7 @@ DataFrame repel_boxes2(
   bool any_overlaps = true;
 
   if (NumericVector::is_na(force)) {
-    force = 1e-6;
+    force = 0.1;
   }
 
   Point xbounds, ybounds;
@@ -634,7 +634,7 @@ DataFrame repel_boxes2(
 
 
 
-  // <<<<<<_@AG:_
+  // <<<<<<_@AG:_ 
   // cycle for n_texts was deleted
   // ________?_______ >> if (i == j) // Skip the data points if the padding is 0.
   //                     if (point_padding_x == 0 && point_padding_y == 0) {continue}
@@ -658,7 +658,7 @@ DataFrame repel_boxes2(
         if (overlaps(NodeBoxes[i], NodeBoxes[j])) {
           any_overlaps = true;
           cj = centroid(NodeBoxes[j]);
-          f = f + repel_force(ci, cj, force * 3, direction);
+          f = f + repel_force(ci, cj, force * 3000, direction);
           }
 
         // Repel the box from other data points. // <<<<<<_@AG:_because we will change the position of other nodes
@@ -668,7 +668,7 @@ DataFrame repel_boxes2(
         }
 
       if (!any_overlaps) {
-        f = f + spring_force(noriginal_centroids[i], ci, force * 2e3, direction);
+        f = f + spring_force(noriginal_centroids[i], ci, force * 20, direction);
         }
 
       // Dampen the forces.
@@ -693,13 +693,13 @@ DataFrame repel_boxes2(
         if (overlaps(EdgeBoxes[i], EdgeBoxes[j])) {
           any_overlaps = true;
           ecj = centroid(EdgeBoxes[j]);
-          ef = ef + repel_force(eci, ecj, force * 3, direction);
+          ef = ef + repel_force(eci, ecj, force * 3000, direction);
           }
         }
 
 
       if (!any_overlaps) {
-        ef = ef + spring_force(eoriginal_centroids[i], eci, force * 2e3, direction);
+        ef = ef + spring_force(eoriginal_centroids[i], eci, force * 20, direction);
         }
 
       // Dampen the forces.
@@ -725,12 +725,12 @@ DataFrame repel_boxes2(
         if (overlaps(NodeBoxes[i], EdgeBoxes[j])) {
           any_overlaps = true;
           bcj = centroid(EdgeBoxes[j]);
-          bf = bf + repel_force(bci, bcj, force * 3, direction);
+          bf = bf + repel_force(bci, bcj, force * 3000, direction);
           }
         }
 
       if (!any_overlaps) {
-        bf = bf + spring_force(noriginal_centroids[i], bci, force * 2e3, direction);
+        bf = bf + spring_force(noriginal_centroids[i], bci, force * 20, direction);
         }
 
       // Dampen the forces.
@@ -745,7 +745,6 @@ DataFrame repel_boxes2(
 
 
 
-
   NumericVector xs(n_points);
   NumericVector ys(n_points);
 
@@ -754,8 +753,9 @@ DataFrame repel_boxes2(
     ys[i] = (NodeBoxes[i].y1 + NodeBoxes[i].y2) / 2;
   }
 
-  return Rcpp::DataFrame::create(
+    return Rcpp::DataFrame::create(
     Rcpp::Named("x") = xs,
     Rcpp::Named("y") = ys
   );
+
 }

@@ -41,10 +41,9 @@ lines_to_check <- data.frame(
   IDs_num = et$s_num,
   IDe_num = et$e_num)
 
-## >>>>> 3. фиктивные ноды посередине ребра_additional_nodes_positions
+## >>>>> 3. dummy nodes at the middle of the edges 
 lines_to_check$middle_x <- (lines_to_check$x + lines_to_check$xend) / 2
 lines_to_check$middle_y <- (lines_to_check$y + lines_to_check$yend) / 2
-
 
 ## >>>>> 4. produce attributes 
 options(stringsAsFactors = FALSE)
@@ -60,7 +59,6 @@ produce_edge_attrs$fontsize <- produce_edge_attrs$fontsize/6
 # str(produce_edge_attrs) # fontsize, label
 # str(produce_node_attrs)
 
-
 ## >>>>> 5. make_content_for_REPEL_BOXES.cpp----------------
 ## >>>>> modifying https://github.com/slowkow/ggrepel/blob/06c6f29f3a5a258282d6f1caa5d5f120540efaaf/R/geom-text-repel.R
 
@@ -71,7 +69,6 @@ box_padding_x <- convertWidth(box.padding, "native", valueOnly = TRUE)
 box_padding_y <- convertHeight(box.padding, "native", valueOnly = TRUE)
 
 # i=1
-# boxes = c()
 # {check.overlap = T, lineheight} in textGrob
 
 elabel_boxes <- lapply(seq(produce_edge_attrs$label), function(i) {
@@ -90,13 +87,12 @@ elabel_boxes <- lapply(seq(produce_edge_attrs$label), function(i) {
   gh <- convertHeight(grobHeight(t), "native", TRUE) / 2
   
   c(
-    "x1" = lines_to_check$middle_x[i] - gw - box_padding_x, #+ x$nudges$x[i],
-    "y1" = lines_to_check$middle_y[i] - gh - box_padding_y, #+ x$nudges$y[i],
-    "x2" = lines_to_check$middle_x[i] + gw + box_padding_x, #+ x$nudges$x[i],
-    "y2" = lines_to_check$middle_y[i] + gh + box_padding_y  #+ x$nudges$y[i]
+    "x1" = lines_to_check$middle_x[i] - gw - box_padding_x, # + x$nudges$x[i],
+    "y1" = lines_to_check$middle_y[i] - gh - box_padding_y, # + x$nudges$y[i],
+    "x2" = lines_to_check$middle_x[i] + gw + box_padding_x, # + x$nudges$x[i],
+    "y2" = lines_to_check$middle_y[i] + gh + box_padding_y  # + x$nudges$y[i]
   )
 })
-
 
 # head(nt)
 # head(lines_to_check)
@@ -125,42 +121,29 @@ nlabel_boxes <- lapply(seq(produce_node_attrs$label), function(i) {
   )
 })
 
-
-
-# for(i in seq(nrow(nlabel_boxes))){
-#   print(centroid(nlabel_boxes[i,]))
-# }
-
-
 nlabel_boxes <- do.call(rbind, nlabel_boxes)
 
 elabel_boxes <- do.call(rbind, elabel_boxes)
 
 edges <- cbind(lines_to_check$IDs_num, lines_to_check$IDe_num)
 
-#nlabel_boxes <- range01(nlabel_boxes)
-#elabel_boxes <- range01(elabel_boxes)
+# nlabel_boxes <- range01(nlabel_boxes)
+# elabel_boxes <- range01(elabel_boxes)
 layout1 <- range01(layout1)
 
-
-#boxes
-str(nlabel_boxes)
-head(nlabel_boxes)
-str(elabel_boxes)
-head(elabel_boxes)
-str(edges)
-head(edges)
-
-str(lines_to_check)
-head(nt)
-head(lines_to_check)
-head(produce_node_attrs)
+# str(nlabel_boxes)
+# head(nlabel_boxes)
+# str(elabel_boxes)
+# head(elabel_boxes)
+# str(edges)
+# head(edges)
+# 
+# str(lines_to_check)
+# head(nt)
+# head(lines_to_check)
+# head(produce_node_attrs)
 
 ## >>>>> 6. call Rcpp----------------
-
-# sourceCpp("test.cpp")
-# double_me(2)
-
 # model data:
 ##xlim <- c(0, 1)
 ##ylim <- c(0, 1)
@@ -177,16 +160,15 @@ ggnet2(m, mode = layout1,
        legend.size = 0, legend.position = "up") 
 dev.off()
 
-
 sourceCpp("repel_boxes.cpp")
-
+# sourceCpp("repel_boxes_unt.cpp")
 
 centers_of_RB <- repel_boxes(data_points=layout1, 
-                             point_padding_x=1e-6, point_padding_y=1e-6, 
+                             point_padding_x=unit(7, "lines"), point_padding_y=unit(7, "lines"), 
                              boxes=nlabel_boxes, 
                              xlim=c(NA, NA), ylim=c(NA, NA)
                              )
-pdf("..\\..\\..\\Desktop\\Graph_gg.pdf", width = 8.50, height = 11)
+pdf("..\\..\\..\\Desktop\\Graph_gg-bp7-f0.1-i8k-rf15-op20.pdf", width = 8.50, height = 11)
 ggnet2(m, mode = as.matrix(centers_of_RB), 
        node.size = produce_node_attrs$width, max_size=5, node.color = produce_node_attrs$color,
        ## alpha = ifelse(produce_node_attrs$width == 0.5, 0, 1),
@@ -196,27 +178,13 @@ ggnet2(m, mode = as.matrix(centers_of_RB),
        legend.size = 0, legend.position = "up") 
 dev.off()
 
-# why it doesn't work
-centers_of_RB <- ggrepel:::repel_boxes(data_points=layout1, 
-                                        point_padding_x=1e-6, point_padding_y=1e-6, 
-                                        boxes=nlabel_boxes, 
-                                        xlim=c(NA, NA), ylim=c(NA, NA)
-                                        )
-ggrepel:::repel_boxes(data_points=layout1, 
-                      # point_padding_x=1e-6, point_padding_y=1e-6, 
-                      point_padding_x=1, point_padding_y=1,
-                      boxes=nlabel_boxes, 
-                      xlim=c(NA, NA), ylim=c(NA, NA)
-                      )
-
-
 centers_of_RB2 <- repel_boxes2(data_points=layout1, 
                                nlabel_boxes=nlabel_boxes, 
                                edge_list=edges, 
                                elabel_boxes=elabel_boxes,
                                xlim = c(NA, NA), ylim = c(NA, NA)
-                              )
-pdf("..\\..\\..\\Desktop\\Graph_ggmod.pdf", width = 8.50, height = 11)
+                               )
+pdf("..\\..\\..\\Desktop\\Graph_ggmod2-bp--f0.2-i9k-rf7k-op2.pdf", width = 8.50, height = 11)
 ggnet2(m, mode = as.matrix(centers_of_RB2), 
        node.size = produce_node_attrs$width, max_size=5, node.color = produce_node_attrs$color,
        ## alpha = ifelse(produce_node_attrs$width == 0.5, 0, 1),
@@ -231,97 +199,37 @@ dev.off()
 
 
 
-######_AFTER_boxes_BEING_REPELED_FROM_each_other_######################
 
-
-# grobs (after >repels<)
-x <- unit(centers_of_RB$x, "native")
-y <- unit(centers_of_RB$y, "native")
-
-# textRepelGrob
-# final <- lapply(seq(produce_node_attrs$label), function(i) {
-  
-  t <- textGrob(produce_node_attrs$label, 
-                x=x + box.padding, 
-                y=y + box.padding, 
-                default.units = "native",
-                
-                gp=gpar(fontsize=produce_node_attrs$fontsize * .pt 
-                ),  
-                name = "text"
-  )
-  
-  x1 <- convertWidth(x - 0.5 * grobWidth(t), "native", TRUE)
-  x2 <- convertWidth(x + 0.5 * grobWidth(t), "native", TRUE)
-  y1 <- convertHeight(y - 0.5 * grobHeight(t), "native", TRUE)
-  y2 <- convertHeight(y + 0.5 * grobHeight(t), "native", TRUE)
-  
-  center <- cbind(x1, y1, x2, y2)
-  
-final <- c()
-  for(i in seq(nrow(center))){
-     final <- rbind(final, centroid(center[i,]))
-     }
-
-
-
-
-#<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-## >>>>> 7. visualize new positions with nodes already under it
-pdf("..\\..\\..\\Desktop\\Graph_pre.pdf", width = 8.50, height = 11)
-ggnet2(m, mode = layout1, 
-       node.size = produce_node_attrs$width, max_size=5, node.color = produce_node_attrs$color,
-       ## alpha = ifelse(produce_node_attrs$width == 0.5, 0, 1),
-       node.label = V(m)$label, label.size = produce_node_attrs$fontsize, label.color = "grey13", #label.trim = 15,
-       edge.size = produce_edge_attrs$penwidth/5, edge.color = produce_edge_attrs$color, edge.label.fill = NA,
-       edge.label = E(m)$label, edge.label.size = produce_edge_attrs$fontsize,
-       legend.size = 0, legend.position = "up") 
-dev.off()
-
-
-pdf("..\\..\\..\\Desktop\\Graph_ggmod.pdf", width = 8.50, height = 11)
-ggnet2(m, mode = as.matrix(final), 
-       node.size = produce_node_attrs$width, max_size=5, node.color = produce_node_attrs$color,
-       ## alpha = ifelse(produce_node_attrs$width == 0.5, 0, 1),
-       node.label = V(m)$label, label.size = produce_node_attrs$fontsize, label.color = "grey13", #label.trim = 15,
-       edge.size = produce_edge_attrs$penwidth/5, edge.color = produce_edge_attrs$color, edge.label.fill = NA,
-       edge.label = E(m)$label, edge.label.size = produce_edge_attrs$fontsize,
-       legend.size = 0, legend.position = "up") 
-dev.off()
-
-
-
-for (i in seq(produce_edge_attrs$label)){
-  labelRepelGrob(produce_edge_attrs$label[i],
-               x[i], 
-               y[i])
-} 
 
 #########################################################
+grid.newpage()
 x <- stats::runif(20)
 y <- stats::runif(20)
-grid.newpage()
 grid.text("SOMETHING NICE AND BIG", x=x, y=y, check.overlap = T,
           gp=gpar(fontsize=20, col="grey"))
 
 
-i <- 1
-grid.text(t)
-grid.text(produce_node_attrs$label[i], 
-         x=nt$x[i], y=nt$y[i], default.units = "native",
-         # check.overlap = T,
-         gp=gpar(fontsize=produce_node_attrs$fontsize[i] * .pt 
-                 # col=produce_node_attrs$color[i],
-                 # lineheight = produce_node_attrs$width[i] # in our origin this is for circle inder label
-         ),  
-         name = "text"
-)
-
-
-
-lines_to_check$middle_x <- (lines_to_check$middle_x-min(lines_to_check$middle_x))/(max(lines_to_check$middle_x)-min(lines_to_check$middle_x))
-lines_to_check$middle_y <- (lines_to_check$middle_y-min(lines_to_check$middle_y))/(max(lines_to_check$middle_y)-min(lines_to_check$middle_y))
 
 grid.newpage()
-grid.text(produce_edge_attrs$label, x=lines_to_check$middle_x, y=lines_to_check$middle_y, 
-          gp=gpar(fontsize=produce_edge_attrs$fontsize, col=produce_edge_attrs$color))
+i <- 1
+grid.text(produce_node_attrs$label[i], 
+         x=nt$x[i], 
+         y=nt$y[i], 
+         default.units = "native",
+         # check.overlap = T,
+         gp=gpar(fontsize=produce_node_attrs$fontsize[i] * .pt 
+            ),  
+         name = "text"
+         )
+
+
+
+# view how >grid.text< draw edge labels as grobs
+grid.newpage()
+grid.text(produce_edge_attrs$label, 
+          x=lines_to_check$middle_x, 
+          y=lines_to_check$middle_y, 
+          gp=gpar(
+            fontsize=produce_edge_attrs$fontsize*3, 
+            col=produce_edge_attrs$color)
+            )
