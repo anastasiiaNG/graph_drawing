@@ -383,7 +383,7 @@ DataFrame repel_boxes(
     double point_padding_x, double point_padding_y,
     NumericMatrix boxes,
     NumericVector xlim, NumericVector ylim,
-    double force = 0.1, int maxiter = 8000,
+    double force = 1e-6, int maxiter = 2000,
     std::string direction = "both"
 ) {
   int n_points = data_points.nrow();
@@ -393,7 +393,7 @@ DataFrame repel_boxes(
   bool any_overlaps = true;
 
   if (NumericVector::is_na(force)) {
-    force = 0.1;
+    force = 1e-6;
   }
 
   Point xbounds, ybounds;
@@ -447,6 +447,7 @@ DataFrame repel_boxes(
   while (any_overlaps && iter < maxiter) {
     iter += 1;
     any_overlaps = false;
+    std::cout << "----------next_iter---------" << std::endl;
 
     for (int i = 0; i < n_texts; i++) {
       f.x = 0;
@@ -463,15 +464,17 @@ DataFrame repel_boxes(
           }
           // Repel the box from its data point.
           if (overlaps(DataBoxes[i], TextBoxes[i])) {
+            std::cout << i << "and its point intersect!" << std::endl;
             any_overlaps = true;
             f = f + repel_force(ci, Points[i], force, direction);
           }
         } else {
           // Repel the box from overlapping boxes.
           if (j < n_texts && overlaps(TextBoxes[i], TextBoxes[j])) {
+            std::cout << i << "and" << j << "intersect!" << std::endl;
             any_overlaps = true;
             cj = centroid(TextBoxes[j]);
-            f = f + repel_force(ci, cj, force * 15, direction);
+            f = f + repel_force(ci, cj, force * 3, direction);
           }
           // Skip the data points if the padding is 0.
           if (point_padding_x == 0 && point_padding_y == 0) {
@@ -479,6 +482,7 @@ DataFrame repel_boxes(
           }
           // Repel the box from other data points.
           if (overlaps(DataBoxes[j], TextBoxes[i])) {
+            std::cout << i << "and" << j << "data point intersect!" << std::endl;
             any_overlaps = true;
             f = f + repel_force(ci, Points[j], force, direction);
           }
@@ -487,7 +491,7 @@ DataFrame repel_boxes(
 
       // Pull the box toward its original position.
       if (!any_overlaps) {
-        f = f + spring_force(original_centroids[i], ci, force * 20, direction);
+        f = f + spring_force(original_centroids[i], ci, force * 2e3, direction);
       }
 
       // Dampen the forces.
@@ -498,264 +502,23 @@ DataFrame repel_boxes(
     }
   }
 
-  NumericVector xs(n_texts);
-  NumericVector ys(n_texts);
-
-  for (int i = 0; i < n_texts; i++) {
-    xs[i] = (TextBoxes[i].x1 + TextBoxes[i].x2) / 2;
-    ys[i] = (TextBoxes[i].y1 + TextBoxes[i].y2) / 2;
+  
+  NumericVector x1(n_points);
+  NumericVector y1(n_points);
+  NumericVector x2(n_points);
+  NumericVector y2(n_points);
+  
+  for (int i = 0; i < n_points; i++) {
+    x1[i] = TextBoxes[i].x1;
+    y1[i] = TextBoxes[i].y1;
+    x2[i] = TextBoxes[i].x2;
+    y2[i] = TextBoxes[i].y2;
   }
-
+  
   return Rcpp::DataFrame::create(
-    Rcpp::Named("x") = xs,
-    Rcpp::Named("y") = ys
+    Rcpp::Named("x1") = x1,
+    Rcpp::Named("y1") = y1,
+    Rcpp::Named("x2") = x2,
+    Rcpp::Named("y2") = y2
   );
-}
-
-
-
-// Adjust the layout of a list of potentially overlapping boxes.
-// @param data_points A numeric matrix with rows representing points like
-//   \code{rbind(c(x, y), c(x, y), ...)}
-// @param nlabel_boxes A numeric matrix with rows representing boxes like
-//   \code{rbind(c(x1, y1, x2, y2), c(x1, y1, x2, y2), ...)}
-// @param edge_list An edge list
-//   \code{rbind(c(start, end), c(start, end), ...}
-// @param elabel_boxes Elabel_boxes
-//   \code{rbind(c(x1, y1, x2, y2), c(x1, y1, x2, y2), ...)}
-// @param xlim A numeric vector representing the limits on the x axis like
-//   \code{c(xmin, xmax)}
-// @param ylim A numeric vector representing the limits on the y axis like
-//   \code{c(ymin, ymax)}
-// @param force Magnitude of the force (defaults to \code{1e-6})
-// @param maxiter Maximum number of iterations to try to resolve overlaps
-//   (defaults to 2000)
-// @noRd
-// [[Rcpp::export]]
-DataFrame repel_boxes2(
-    NumericMatrix data_points,
-    NumericMatrix nlabel_boxes,
-    NumericMatrix edge_list,
-    NumericMatrix elabel_boxes,
-    NumericVector xlim, NumericVector ylim,
-    double force = 0.1, int maxiter = 8000,
-    std::string direction = "both"
-) {
-  int n_points = nlabel_boxes.nrow();
-  int e_points = elabel_boxes.nrow();
-  // int total_points = n_points + e_points;
-  // int n_texts = boxes.nrow();
-  // assert(n_points >= n_texts); <<<<<<_@AG:_commented by slowkow
-  int iter = 0;
-  bool any_overlaps = true;
-
-  if (NumericVector::is_na(force)) {
-    force = 0.1;
-  }
-
-  Point xbounds, ybounds;
-  xbounds.x = xlim[0];
-  xbounds.y = xlim[1];
-  ybounds.x = ylim[0];
-  ybounds.y = ylim[1];
-
-  // Each data point gets a bounding box. <<<<<<_@AG:_ (=Points)
-  std::vector<Box> DataBoxes(n_points);
-  for (int i = 0; i < n_points; i++) {
-    DataBoxes[i].x1 = data_points(i, 0); //- point_padding_x;
-    DataBoxes[i].y1 = data_points(i, 1); //- point_padding_y;
-    DataBoxes[i].x2 = data_points(i, 0); //+ point_padding_x;
-    DataBoxes[i].y2 = data_points(i, 1); //+ point_padding_y;
-  }
-
-  std::vector<Point> Points(n_points); // <<<<<<_@AG:_actually, it's the same as above, can delete DataBoxes (if it doesn't break anything)
-  for (int i = 0; i < n_points; i++) {
-    Points[i].x = data_points(i, 0);
-    Points[i].y = data_points(i, 1);
-  }
-
-  // Add a tiny bit of jitter to each text box at the start.
-  NumericVector r = rnorm(n_points, 0, force);
-  // std::vector<Box> TextBoxes(n_texts); // 0
-  std::vector<Box> NodeBoxes(n_points);
-  std::vector<double> nratios(n_points);
-  std::vector<Point> noriginal_centroids(n_points);
-
-  std::vector<Box> EdgeBoxes(n_points);
-  std::vector<double> eratios(n_points);
-  std::vector<Point> eoriginal_centroids(n_points);
-
-
-  for (int i = 0; i < n_points; i++) {
-    NodeBoxes[i].x1 = nlabel_boxes(i, 0);
-    NodeBoxes[i].x2 = nlabel_boxes(i, 2);
-    NodeBoxes[i].y1 = nlabel_boxes(i, 1);
-    NodeBoxes[i].y2 = nlabel_boxes(i, 3);
-
-    // Don't add jitter if the user wants to repel in just one direction.
-    if (direction != "y") {
-      NodeBoxes[i].x1 += r[i];
-      NodeBoxes[i].x2 += r[i];
-    }
-    if (direction != "x") {
-      NodeBoxes[i].y1 += r[i];
-      NodeBoxes[i].y2 += r[i];
-    }
-    // height over width
-    nratios[i] = (NodeBoxes[i].y2 - NodeBoxes[i].y1)
-      / (NodeBoxes[i].x2 - NodeBoxes[i].x1);
-    noriginal_centroids[i] = centroid(NodeBoxes[i]);
-  }
-
-
-  for (int i = 0; i < e_points; i++) {
-    EdgeBoxes[i].x1 = elabel_boxes(i, 0);
-    EdgeBoxes[i].x2 = elabel_boxes(i, 2);
-    EdgeBoxes[i].y1 = elabel_boxes(i, 1);
-    EdgeBoxes[i].y2 = elabel_boxes(i, 3);
-
-    // Don't add jitter if the user wants to repel in just one direction.
-    if (direction != "y") {
-      EdgeBoxes[i].x1 += r[i];
-      EdgeBoxes[i].x2 += r[i];
-    }
-    if (direction != "x") {
-      EdgeBoxes[i].y1 += r[i];
-      EdgeBoxes[i].y2 += r[i];
-    }
-    // height over width
-    eratios[i] = (EdgeBoxes[i].y2 - EdgeBoxes[i].y1)
-      / (EdgeBoxes[i].x2 - EdgeBoxes[i].x1);
-    eoriginal_centroids[i] = centroid(EdgeBoxes[i]);
-  }
-
-
-
-
-
-
-  // <<<<<<_@AG:_ 
-  // cycle for n_texts was deleted
-  // ________?_______ >> if (i == j) // Skip the data points if the padding is 0.
-  //                     if (point_padding_x == 0 && point_padding_y == 0) {continue}
-
-  Point f, ci, cj, ef, eci, ecj, bf, bci, bcj;
-
-  while (any_overlaps && iter < maxiter) {
-    iter += 1;
-    any_overlaps = false;
-
-
-    // NODE_LABELS
-    for (int i = 0; i < n_points; i++) {
-      f.x = 0;
-      f.y = 0;
-      ci = centroid(NodeBoxes[i]);
-
-      for (int j = i + 1; j < n_points; j++) {
-
-        // Repel the box from overlapping boxes.
-        if (overlaps(NodeBoxes[i], NodeBoxes[j])) {
-          any_overlaps = true;
-          cj = centroid(NodeBoxes[j]);
-          f = f + repel_force(ci, cj, force * 3000, direction);
-          }
-
-        // Repel the box from other data points. // <<<<<<_@AG:_because we will change the position of other nodes
-        // if (overlaps(NodeBoxes[i], DataBoxes[j])) {
-        //    any_overlaps = true;
-        //    f = f + repel_force(ci, Points[j], force, direction);
-        }
-
-      if (!any_overlaps) {
-        f = f + spring_force(noriginal_centroids[i], ci, force * 20, direction);
-        }
-
-      // Dampen the forces.
-      f = f * (1 - 1e-3);
-
-      NodeBoxes[i] = NodeBoxes[i] + f;
-      NodeBoxes[i] = put_within_bounds(NodeBoxes[i], xbounds, ybounds);
-      }
-
-
-
-    // EDGE_LABELS
-    for (int i = 0; i < e_points; i++) {
-      ef.x = 0;
-      ef.y = 0;
-
-      eci = centroid(EdgeBoxes[i]);
-
-      for (int j = i + 1; j < e_points; j++) {
-
-        // Repel the box from overlapping boxes.
-        if (overlaps(EdgeBoxes[i], EdgeBoxes[j])) {
-          any_overlaps = true;
-          ecj = centroid(EdgeBoxes[j]);
-          ef = ef + repel_force(eci, ecj, force * 3000, direction);
-          }
-        }
-
-
-      if (!any_overlaps) {
-        ef = ef + spring_force(eoriginal_centroids[i], eci, force * 20, direction);
-        }
-
-      // Dampen the forces.
-      ef = ef * (1 - 1e-3);
-
-      NodeBoxes[edge_list(i, 0)] = NodeBoxes[edge_list(i, 0)] + ef; // <<<<<<_@AG:_apply to start = 1st col
-      NodeBoxes[edge_list(i, 1)] = NodeBoxes[edge_list(i, 1)] + ef; // <<<<<<_@AG:_apply to end = 2d col
-      NodeBoxes[edge_list(i, 0)] = put_within_bounds(NodeBoxes[edge_list(i, 0)], xbounds, ybounds); // <<<<<<_@AG:_1st
-      NodeBoxes[edge_list(i, 1)] = put_within_bounds(NodeBoxes[edge_list(i, 1)], xbounds, ybounds); // <<<<<<_@AG:_2d
-      }
-
-
-
-    // NODE and EDGE LABELS
-    for (int i = 0; i < n_points; i++) {
-      bf.x = 0;
-      bf.y = 0;
-      bci = centroid(NodeBoxes[i]);
-
-      for (int j = 0; j < e_points; j++) {
-
-        // Repel the box from overlapping boxes.
-        if (overlaps(NodeBoxes[i], EdgeBoxes[j])) {
-          any_overlaps = true;
-          bcj = centroid(EdgeBoxes[j]);
-          bf = bf + repel_force(bci, bcj, force * 3000, direction);
-          }
-        }
-
-      if (!any_overlaps) {
-        bf = bf + spring_force(noriginal_centroids[i], bci, force * 20, direction);
-        }
-
-      // Dampen the forces.
-      bf = bf * (1 - 1e-3);
-
-      NodeBoxes[i] = NodeBoxes[i] + bf;
-      NodeBoxes[i] = put_within_bounds(NodeBoxes[i], xbounds, ybounds);
-      }
-    }
-
-
-
-
-
-  NumericVector xs(n_points);
-  NumericVector ys(n_points);
-
-  for (int i = 0; i < n_points; i++) {
-    xs[i] = (NodeBoxes[i].x1 + NodeBoxes[i].x2) / 2;
-    ys[i] = (NodeBoxes[i].y1 + NodeBoxes[i].y2) / 2;
-  }
-
-    return Rcpp::DataFrame::create(
-    Rcpp::Named("x") = xs,
-    Rcpp::Named("y") = ys
-  );
-
 }
