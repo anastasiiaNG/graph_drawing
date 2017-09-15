@@ -3,10 +3,11 @@ force_alg <- function(layout1,
                       nlabel_semisizes,
                       elabel_semisizes,
                       edges,
+                      xlim = new_borders_x_bot,
+                      ylim = new_borders_y_bot,
                       n_iter = 8000, force = 1e-6){
 
-  # sw <- semiwidth(elabel_boxes)
-  # sh <- semiheight(elabel_boxes)
+  longer_goes_Y <- mean(nlabel_semisizes[ ,1])
   iter <- 1
 
   layouts <- list()
@@ -35,16 +36,17 @@ force_alg <- function(layout1,
           f <- force * unit_vector(c1, c2) / max(quad_dist(c1, c2), 0.01)
           force_layout[n1, ] <- force_layout[n1, ] + f / 2
           force_layout[n2, ] <- force_layout[n2, ] - f / 2
-          # add random to Y:
-          force_layout[n1, 2] <- force_layout[n1, 2] + runif(1, min = 0, max = 0.0001)
-          force_layout[n2, 2] <- force_layout[n2, 2] - runif(1, min = 0, max = 0.0001)
-          # force_node[n1, ] <- force_node[n1, ] + f / 2
-          # force_node[n2, ] <- force_node[n2, ] - f / 2
+
+          if(nlabel_semisizes[n1, 1] > longer_goes_Y){
+            force_layout[n1, 2] <- 2 * (force_layout[n1, 2] + 0.0001)
+          }
+          if(nlabel_semisizes[n2, 1] > longer_goes_Y){
+            force_layout[n2, 2] <- 2 * (force_layout[n2, 2] + 0.0001)
+          }
         }
       }
 
       # ...and edges (do not move it once again)
-      # + add random y-component = 20-50% from elabel_box semiheight
       for (e1 in 1:nrow(elabel_boxes)){
         if (intersect(nlabel_boxes[n1, ], elabel_boxes[e1, ])){
           # print(c(iter, "n-e: ", nt$label[n1], et$label[e1]))
@@ -53,9 +55,10 @@ force_alg <- function(layout1,
           c2 <- centroid(elabel_boxes[e1, ])
           f <- 2 * force * unit_vector(c1, c2) / max(quad_dist(c1, c2), 0.01)
           force_layout[n1, ] <- force_layout[n1, ] + f / 2
-          # add random to Y:
-          force_layout[n1, 2] <- force_layout[n1, 2] + runif(1, min = 0, max = 0.0001)
-          # force_node[n1, ] <- force_node[n1, ] + f / 2
+
+          if(nlabel_semisizes[n1, 1] > longer_goes_Y){
+            force_layout[n1, 2] <- 2 * (force_layout[n1, 2] + 0.0001)
+          }
         }
       }
     }
@@ -73,27 +76,15 @@ force_alg <- function(layout1,
 
           force_layout[edges[e1, 1], ] <- force_layout[edges[e1, 1], ] + f / 2
           force_layout[edges[e1, 2], ] <- force_layout[edges[e1, 2], ] + f / 2
-          # force_node[edges[e1, 1], ] <- force_node[edges[e1, 1], ] + f / 2
-          # force_node[edges[e1, 2], ] <- force_node[edges[e1, 2], ] + f / 2
 
           force_layout[edges[e2, 1], ] <- force_layout[edges[e2, 1], ] - f / 2
           force_layout[edges[e2, 2], ] <- force_layout[edges[e2, 2], ] - f / 2
-          # force_node[edges[e2, 1], ] <- force_node[edges[e2, 1], ] - f / 2
-          # force_node[edges[e2, 2], ] <- force_node[edges[e2, 2], ] - f / 2
-
-          # add random to Y:
-          force_layout[edges[e1, 1], 2] <- force_layout[edges[e1, 1], 2] + runif(1, min = 0, max = 0.0001)
-          force_layout[edges[e1, 2], 2] <- force_layout[edges[e1, 2], 2] + runif(1, min = 0, max = 0.0001)
-          force_layout[edges[e2, 1], 2] <- force_layout[edges[e2, 1], 2] - runif(1, min = 0, max = 0.0001)
-          force_layout[edges[e2, 2], 2] <- force_layout[edges[e2, 2], 2] - runif(1, min = 0, max = 0.0001)
         }
       }
     }
 
-
     # Damping / friction / annealing
     force_layout <- force_layout * (1 - (1e-3) * iter)
-    # force_node <- force_node * (1 - (1e-3) * iter)
 
     # Prohibit strong displacements
     force_layout[force_layout > 0.1] <- 0.1
@@ -103,30 +94,23 @@ force_alg <- function(layout1,
     # FORCE REALIZATION
     if (iter!=n_iter){
       layout1 <- layout1 + force_layout
-      # nlabel_boxes <- nlabel_boxes + force_node
-      #debug:
-      # print(force_layout)
-      #:debug
-      layouts[[iter]] <- layout1
 
-      # # Calculate new elabel_boxes
-      # for(e in 1:(nrow(elabel_boxes))){
-      #   new_center <- center(layout1[edges[e, 1], c(1, 2)], layout1[edges[e, 2], c(1, 2)])
-      #   # x1
-      #   elabel_boxes[e, 1] <- new_center[1] - sw[e]
-      #   # y1
-      #   elabel_boxes[e, 2] <- new_center[2] - sh[e]
-      #   # x2
-      #   elabel_boxes[e, 3] <- new_center[1] + sw[e]
-      #   # y2
-      #   elabel_boxes[e, 4] <- new_center[2] + sh[e]
-      # }
+      # Prohibit crawling away borders
+      layout1[,1][layout1[,1] < new_borders_x_bot] <- new_borders_x_bot
+      layout1[,1][layout1[,1] > 1 - new_borders_x_bot] <- 1 - new_borders_x_bot
+      layout1[,2][layout1[,2] < new_borders_y_bot] <- new_borders_y_bot
+      layout1[,2][layout1[,2] > 1 - new_borders_y_bot] <- 1 - new_borders_y_bot
+
+      layouts[[iter]] <- layout1
     }
 
     iter <- iter + 1
   }
 
   # force_node[which(semiwidth(nlabel_boxes) > 0.8 * max(semiwidth(nlabel_boxes))), ][,2] <- 1.0001 * force_node[which(semiwidth(nlabel_boxes) > 0.8 * max(semiwidth(nlabel_boxes))), ][,2]
+  # add random to Y:
+  # force_layout[n1, 2] <- force_layout[n1, 2] + 1.5 * runif(1, min = -nlabel_semisizes$..., max = nlabel_semisizes$...)
+  # force_layout[n2, 2] <- force_layout[n2, 2] - 1.5 * runif(1, min = -nlabel_semisizes$..., max = nlabel_semisizes$...)
 
   # if(!intersection){
   #   # ... spring
