@@ -9,10 +9,10 @@ get_nlabel_boxes <- function(layout1, nlabel_semisizes){
 
 get_elabel_boxes <- function(layout1, edges, elabel_semisizes){
   middles <- matrix(0, nrow = nrow(edges), ncol = 2)
-  for(i in seq(nrow(edges))){
-    middles[i, 1] <- (layout1[edges[i, 1], 1] + layout1[edges[i, 2], 1]) / 2
-    middles[i, 2] <- (layout1[edges[i, 1], 2] + layout1[edges[i, 2], 2]) / 2
-  }
+  invisible( lapply(seq(nrow(edges)), function(i) {
+    middles[i, 1] <<- (layout1[edges[i, 1], 1] + layout1[edges[i, 2], 1]) / 2 }) )
+  invisible( lapply(seq(nrow(edges)), function(i) {
+    middles[i, 2] <<- (layout1[edges[i, 1], 2] + layout1[edges[i, 2], 2]) / 2 }) )
   return(data.frame("x1"=middles[, 1] - elabel_semisizes$semi_w,
                     "y1"=middles[, 2] - elabel_semisizes$semi_h,
                     "x2"=middles[, 1] + elabel_semisizes$semi_w,
@@ -63,7 +63,7 @@ unit_vector <- function(c1, c2){
 make_giff2 <- function(layouts){
   for (i in seq_along(layouts)) {
     layout1 <- layouts[[i]]
-    png(filename=paste0("../../../Desktop/r/1209_10-5_100_Y_rescale_paddProp_noSrawl/", i, ".png"), res = 144, width = 8.5, height = 11, units = "in")
+    png(filename=paste0("../../../Desktop/r/2409_10-6_50/", i, ".png"), res = 144, width = 8.5, height = 11, units = "in")
     plot(ggnet2(m, mode = as.matrix(layout1), layout.exp = 0.2,
                 node.size = produce_node_attrs$width, max_size=5, node.color = produce_node_attrs$color,
                 ## alpha = ifelse(produce_node_attrs$width == 0.5, 0, 1),
@@ -76,11 +76,13 @@ make_giff2 <- function(layouts){
   }
 }
 
+system.time({
 layout2 <- force_alg(layout1,
                      nlabel_semisizes,
                      elabel_semisizes,
                      edges,
-                     n_iter = 200, force = 1e-6)
+                     n_iter = 10, force = 1e-5)
+})
 
 make_giff2(layout2$layouts)
 

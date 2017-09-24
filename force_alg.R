@@ -8,79 +8,95 @@ force_alg <- function(layout1,
                       n_iter = 8000, force = 1e-6){
 
   longer_goes_Y <- mean(nlabel_semisizes[ ,1])
+  intersection <- TRUE
   iter <- 1
 
   layouts <- list()
 
-  while(iter <= n_iter){
+  while(iter <= n_iter && intersection){
 
     # print(c("Goes to ", iter, " iteration"))
-    # intersection <- FALSE
+    intersection <- FALSE
 
     nlabel_boxes <- get_nlabel_boxes(layout1, nlabel_semisizes)
     elabel_boxes <- get_elabel_boxes(layout1, edges, elabel_semisizes)
 
     force_layout <- matrix(0, nrow = nrow(nlabel_boxes), ncol = 2)
-    force_node <- matrix(0, nrow = nrow(nlabel_boxes), ncol = 4)
 
     # FORCE ACCUMULATION
     # NODES
-    for (n1 in 1:(nrow(nlabel_boxes)-1)){
-      # ...and nodes
-      for (n2 in (n1+1):nrow(nlabel_boxes)){
-        if (intersect(nlabel_boxes[n1, ], nlabel_boxes[n2, ])){
-          # print(c(iter, "n-n: ", nt$label[n1], nt$label[n2]))
-          intersection <- TRUE
-          c1 <- centroid(nlabel_boxes[n1, ])
-          c2 <- centroid(nlabel_boxes[n2, ])
-          f <- force * unit_vector(c1, c2) / max(quad_dist(c1, c2), 0.01)
-          force_layout[n1, ] <- force_layout[n1, ] + f / 2
-          force_layout[n2, ] <- force_layout[n2, ] - f / 2
+    # ...and nodes
+    inter_matrix <- outer(seq_len(nrow(nlabel_boxes)), seq_len(nrow(nlabel_boxes)),
+                          Vectorize(function(i,j) { intersect(nlabel_boxes[i,], nlabel_boxes[j,]) }))
+    diag(inter_matrix) <- FALSE
+    inters <- which(inter_matrix, arr.ind = T)
 
-          if(nlabel_semisizes[n1, 1] > longer_goes_Y){
-            force_layout[n1, 2] <- 2 * (force_layout[n1, 2] + 0.0001)
-          }
-          if(nlabel_semisizes[n2, 1] > longer_goes_Y){
-            force_layout[n2, 2] <- 2 * (force_layout[n2, 2] + 0.0001)
-          }
-        }
-      }
+    if(length(inters)!=0){
+      intersection <- TRUE
 
-      # ...and edges (do not move it once again)
-      for (e1 in 1:nrow(elabel_boxes)){
-        if (intersect(nlabel_boxes[n1, ], elabel_boxes[e1, ])){
-          # print(c(iter, "n-e: ", nt$label[n1], et$label[e1]))
-          intersection <- TRUE
-          c1 <- centroid(nlabel_boxes[n1, ])
-          c2 <- centroid(elabel_boxes[e1, ])
-          f <- 2 * force * unit_vector(c1, c2) / max(quad_dist(c1, c2), 0.01)
-          force_layout[n1, ] <- force_layout[n1, ] + f / 2
+      c1 <- lapply(seq(nrow(inters)), function(i) centroid(nlabel_boxes[inters[i,1], ]))
+      c1 <- do.call(rbind, c1)
+      c2 <- lapply(seq(nrow(inters)), function(i) centroid(nlabel_boxes[inters[i,2], ]))
+      c2 <- do.call(rbind, c2)
+      f <- lapply(seq(nrow(c1)), function(i) {
+                    force * unit_vector(c1[i,], c2[i,]) / max(quad_dist(c1[i,], c2[i,]), 0.01)
+                    })
+      f <- do.call(rbind, f) / 2
 
-          if(nlabel_semisizes[n1, 1] > longer_goes_Y){
-            force_layout[n1, 2] <- 2 * (force_layout[n1, 2] + 0.0001)
-          }
-        }
-      }
+      # inters DOUBLE INTERSECT_PAIRS => may use only first COLUMN and only "+":
+      invisible( lapply(seq(nrow(inters)), function(i) {
+        force_layout[inters[i,1], ] <<- force_layout[inters[i,1], ] + f[i, ] }) )
+      # +0.0001...
+      force_layout[, 2][nlabel_semisizes[,1] > longer_goes_Y] <- 2 * force_layout[, 2][nlabel_semisizes[,1] > longer_goes_Y]
     }
+    
+    # ...and edges 
+    inter_matrix2 <- outer(seq_len(nrow(nlabel_boxes)), seq_len(nrow(elabel_boxes)),
+                           Vectorize(function(i,j) { intersect(nlabel_boxes[i,], elabel_boxes[j,]) }))
+    inters2 <- which(inter_matrix2, arr.ind = T)
+    
+    if(length(inters2)!=0){
+      intersection <- TRUE
+      
+      c1 <- lapply(seq(nrow(inters2)), function(i) centroid(nlabel_boxes[inters2[i,1], ]))
+      c1 <- do.call(rbind, c1)
+      c2 <- lapply(seq(nrow(inters2)), function(i) centroid(elabel_boxes[inters2[i,2], ]))
+      c2 <- do.call(rbind, c2)
+      f <- lapply(seq(nrow(c1)), function(i) {
+                  force * unit_vector(c1[i,], c2[i,]) / max(quad_dist(c1[i,], c2[i,]), 0.01)
+                  })
+      f <- do.call(rbind, f) / 2
 
+      invisible( lapply(seq(nrow(inters2)), function(i) {
+        force_layout[inters2[i,1], ] <<- force_layout[inters2[i,1], ] + f[i, ] }) )
+
+      force_layout[, 2][nlabel_semisizes[,1] > longer_goes_Y] <- 2 * force_layout[, 2][nlabel_semisizes[,1] > longer_goes_Y]
+    }
+    
     # EDGES
     # ...and edges
-    for (e1 in 1:(nrow(elabel_boxes)-1)){
-      for (e2 in (e1+1):nrow(elabel_boxes)){
-        if (intersect(elabel_boxes[e1, ], elabel_boxes[e2, ])){
-          # print(c(iter, "e-e: ", et$label[e1], et$label[e2]))
-          itersection <- TRUE
-          c1 <- centroid(elabel_boxes[e1, ])
-          c2 <- centroid(elabel_boxes[e2, ])
-          f <- force * unit_vector(c1, c2) / max(quad_dist(c1, c2), 0.01)
+    inter_matrix3 <- outer(seq_len(nrow(elabel_boxes)), seq_len(nrow(elabel_boxes)),
+                           Vectorize(function(i,j) { intersect(elabel_boxes[i,], elabel_boxes[j,]) }))
+    diag(inter_matrix3) <- FALSE
+    inters3 <- which(inter_matrix3, arr.ind = T)
 
-          force_layout[edges[e1, 1], ] <- force_layout[edges[e1, 1], ] + f / 2
-          force_layout[edges[e1, 2], ] <- force_layout[edges[e1, 2], ] + f / 2
+    if(length(inters3)!=0){
+      intersection <- TRUE
 
-          force_layout[edges[e2, 1], ] <- force_layout[edges[e2, 1], ] - f / 2
-          force_layout[edges[e2, 2], ] <- force_layout[edges[e2, 2], ] - f / 2
-        }
-      }
+      c1 <- lapply(seq(nrow(inters3)), function(i) centroid(elabel_boxes[inters3[i,1], ]))
+      c1 <- do.call(rbind, c1)
+      c2 <- lapply(seq(nrow(inters3)), function(i) centroid(elabel_boxes[inters3[i,2], ]))
+      c2 <- do.call(rbind, c2)
+      f <- lapply(seq(nrow(c1)), function(i) {
+                    force * unit_vector(c1[i,], c2[i,]) / max(quad_dist(c1[i,], c2[i,]), 0.01)
+                    })
+      f <- do.call(rbind, f) / 2
+
+      invisible( lapply(seq(nrow(inters)), function(i) {
+        force_layout[edges[inters[i,1]], ] <<- force_layout[edges[inters[i,1]], ] + f[i, ] }) )
+
+      invisible( lapply(seq(nrow(inters)), function(i) {
+        force_layout[edges[inters[i,2]], ] <<- force_layout[edges[inters[i,2]], ] + f[i, ] }) )
     }
 
     # Damping / friction / annealing

@@ -1,8 +1,8 @@
 
 setwd("~/R-studio/gatom")
 library(gatom)
-library(data.table)
 library(igraph)
+library(data.table)
 library(ForceAtlas2)
 library(ggnet)
 library(network)
@@ -32,13 +32,12 @@ gs <- scoreGraph(g, k.gene = 25, k.met=25)
 
 set.seed(42)
 m <- solveSgmwcsRandHeur(gs, max.iterations = 2000)
-m_native <- m
+m_native <- m #
 
 ## >>>>> 1. create layout
 layout1 <- layout_with_kk(m)
 range01 <- function(x){(x-min(x))/(max(x)-min(x))}
-layout1[,1] <- range01(layout1[,1])
-layout1[,2] <- range01(layout1[,2])
+layout1 <- apply(layout1, 2, range01)
 
 ## >>>>> 2. create df >lines_to_check< (taken from "intersections.R") where all necessary info is stored
 store_all_info <- function(m, layout1){
@@ -46,28 +45,16 @@ store_all_info <- function(m, layout1){
   nt <- as_data_frame(m, "vertices")
   nt$x <- layout1[,1]
   nt$y <- layout1[,2]
-  # head(layout1)
 
   et <- as_data_frame(m, "edges")
-
-  i = 1
-  # node_start <- "C00022_0"
-  # which(nt$name==node_start) # 1
-  for(node_start in et$from){
-    #print(node_start)
-    et$x[i] <- nt$x[nt$name==node_start]
-    #print(et$x[i])
-    et$y[i] <- nt$y[nt$name==node_start]
-    et$s_num[i] <- which(nt$name==node_start)
-    i <- i + 1
-  }
-  i = 1
-  for(node_end in et$to){
-    et$xend[i] <- nt$x[nt$name==node_end]
-    et$yend[i] <- nt$y[nt$name==node_end]
-    et$e_num[i] <- which(nt$name==node_end)
-    i <- i + 1
-  }
+                 
+  et$x <- sapply(seq(et$from), function(i) nt$x[nt$name==et$from[i]])
+  et$y <- sapply(seq(et$from), function(i) nt$y[nt$name==et$from[i]])
+  et$s_num <- sapply(seq(et$from), function(i) which(nt$name==et$from[i]))
+  
+  et$xend <- sapply(seq(et$to), function(i) nt$x[nt$name==et$to[i]])
+  et$yend <- sapply(seq(et$to), function(i) nt$y[nt$name==et$to[i]])
+  et$e_num <- sapply(seq(et$to), function(i) which(nt$name==et$to[i]))
 
   lines_to_check <- data.frame(
     x = et$x,
@@ -94,16 +81,13 @@ et <- store_all_info(m, layout1)$et
 lines_to_check <- store_all_info(m, layout1)$lines_to_check
 
 
-## >>>>> 3. produce attributes
+## >>>>> 3. produce attributes (fontsize, label)
 options(stringsAsFactors = FALSE)
 produce_node_attrs <- gatom:::getDotNodeStyleAttributes(as_data_frame(m, what = "vertices"))
 produce_edge_attrs <- gatom:::getDotEdgeStyleAttributes(as_data_frame(m))
 
 produce_node_attrs$fontsize <- produce_node_attrs$fontsize/6.5
 produce_edge_attrs$fontsize <- produce_edge_attrs$fontsize/6
-
-# str(produce_edge_attrs) # fontsize, label
-# str(produce_node_attrs)
 
 
 ## >>>>> 4. make_content_for_REPEL_BOXES.cpp----------------
