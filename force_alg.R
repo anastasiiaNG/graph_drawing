@@ -92,11 +92,11 @@ force_alg <- function(layout1,
                     })
       f <- do.call(rbind, f) / 2
 
-      invisible( lapply(seq(nrow(inters)), function(i) {
-        force_layout[edges[inters[i,1]], ] <<- force_layout[edges[inters[i,1]], ] + f[i, ] }) )
+      invisible( lapply(seq(nrow(inters3)), function(i) {
+        force_layout[edges[inters3[i,1], 1], ] <<- force_layout[edges[inters3[i,1], 1], ] + f[i, ] }) )
 
-      invisible( lapply(seq(nrow(inters)), function(i) {
-        force_layout[edges[inters[i,2]], ] <<- force_layout[edges[inters[i,2]], ] + f[i, ] }) )
+      invisible( lapply(seq(nrow(inters3)), function(i) {
+        force_layout[edges[inters3[i,1], 2], ] <<- force_layout[edges[inters3[i,1], 2], ] + f[i, ] }) )
     }
 
     # Damping / friction / annealing
