@@ -62,7 +62,8 @@ unit_vector <- function(c1, c2){
 make_giff2 <- function(layouts){
   for (i in seq_along(layouts)) {
     layout1 <- layouts[[i]]
-    png(filename=paste0("../../../Desktop/r/2809g2/", i, ".png"), res = 144, width = 8.5, height = 11, units = "in")
+    png(filename=paste0("../../../Desktop/r/2809g4/", i, ".png"), res = 144, width = 8.5, height = 11, units = "in")
+    # png(filename=paste0("../../../Desktop/r/2809g4/", i, ".png"), res = 144, width = 17, height = 22, units = "in")
     plot(ggnet2(m, mode = as.matrix(layout1), layout.exp = 0.2,
                 node.size = produce_node_attrs$width, max_size=5, node.color = produce_node_attrs$color,
                 ## alpha = ifelse(produce_node_attrs$width == 0.5, 0, 1),
@@ -80,12 +81,8 @@ layout2 <- force_alg(layout1,
                      nlabel_semisizes,
                      elabel_semisizes,
                      edges,
-                     n_iter = 100, force = 5*1e-4)
+                     n_iter = 100, force = 1e-5)
 })
-#  for n_iter = 5   old7.8   new11.78 new2=0.65
-#  for n_iter = 10  old15.15 new23.42
-#  for n_iter = 15  old22.71 new34.77 new2=1.14
-#  for n_iter = 150 new2=4.85, 16.50, 9.98 [24s for 800] depends on padding and force
 
 make_giff2(layout2$layouts)
 
