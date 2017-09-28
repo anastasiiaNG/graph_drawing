@@ -8,21 +8,20 @@ get_nlabel_boxes <- function(layout1, nlabel_semisizes){
 }
 
 get_elabel_boxes <- function(layout1, edges, elabel_semisizes){
-  middles <- matrix(0, nrow = nrow(edges), ncol = 2)
-  invisible( lapply(seq(nrow(edges)), function(i) {
-    middles[i, 1] <<- (layout1[edges[i, 1], 1] + layout1[edges[i, 2], 1]) / 2 }) )
-  invisible( lapply(seq(nrow(edges)), function(i) {
-    middles[i, 2] <<- (layout1[edges[i, 1], 2] + layout1[edges[i, 2], 2]) / 2 }) )
-  return(data.frame("x1"=middles[, 1] - elabel_semisizes$semi_w,
-                    "y1"=middles[, 2] - elabel_semisizes$semi_h,
-                    "x2"=middles[, 1] + elabel_semisizes$semi_w,
-                    "y2"=middles[, 2] + elabel_semisizes$semi_h
+  return(data.frame("x1"=(layout1[edges[,1], 1] + layout1[edges[,2], 1]) / 2 - 
+                      elabel_semisizes$semi_w,
+                    "y1"=(layout1[edges[,1], 2] + layout1[edges[,2], 2]) / 2 - 
+                      elabel_semisizes$semi_h,
+                    "x2"=(layout1[edges[,1], 1] + layout1[edges[,2], 1]) / 2 + 
+                      elabel_semisizes$semi_w,
+                    "y2"=(layout1[edges[,1], 2] + layout1[edges[,2], 2]) / 2 + 
+                      elabel_semisizes$semi_h
   )
   )
 }
 
 intersect <- function(box1, box2){
-  return (box1$x1 < box2$x2 && box1$y1 < box2$y2 && box1$x2 > box2$x1 && box1$y2 > box2$y1)
+  return (box1$x1 < box2$x2 & box1$y1 < box2$y2 & box1$x2 > box2$x1 & box1$y2 > box2$y1)
 }
 
 quad_dist <- function(c1, c2){
@@ -63,7 +62,7 @@ unit_vector <- function(c1, c2){
 make_giff2 <- function(layouts){
   for (i in seq_along(layouts)) {
     layout1 <- layouts[[i]]
-    png(filename=paste0("../../../Desktop/r/2409_10-6_50/", i, ".png"), res = 144, width = 8.5, height = 11, units = "in")
+    png(filename=paste0("../../../Desktop/r/2809g2/", i, ".png"), res = 144, width = 8.5, height = 11, units = "in")
     plot(ggnet2(m, mode = as.matrix(layout1), layout.exp = 0.2,
                 node.size = produce_node_attrs$width, max_size=5, node.color = produce_node_attrs$color,
                 ## alpha = ifelse(produce_node_attrs$width == 0.5, 0, 1),
@@ -81,8 +80,12 @@ layout2 <- force_alg(layout1,
                      nlabel_semisizes,
                      elabel_semisizes,
                      edges,
-                     n_iter = 10, force = 1e-5)
+                     n_iter = 100, force = 5*1e-4)
 })
+#  for n_iter = 5   old7.8   new11.78 new2=0.65
+#  for n_iter = 10  old15.15 new23.42
+#  for n_iter = 15  old22.71 new34.77 new2=1.14
+#  for n_iter = 150 new2=4.85, 16.50, 9.98 [24s for 800] depends on padding and force
 
 make_giff2(layout2$layouts)
 

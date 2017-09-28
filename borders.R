@@ -93,7 +93,7 @@ produce_edge_attrs$fontsize <- produce_edge_attrs$fontsize/6
 ## >>>>> 4. make_content_for_REPEL_BOXES.cpp----------------
 ## >>>>> modifying https://github.com/slowkow/ggrepel/blob/06c6f29f3a5a258282d6f1caa5d5f120540efaaf/R/geom-text-repel.R
 # box.padding <- unit(0, "lines")
-box.padding <- unit(0.04 * produce_node_attrs$fontsize, "lines")
+box.padding <- unit(0.06 * produce_node_attrs$fontsize, "lines") # was 0.04
 box_padding_x <- convertWidth(box.padding, "npc", valueOnly = TRUE) # 7.649402e-08 VS 4.8 (1)
 box_padding_y <- convertHeight(box.padding, "npc", valueOnly = TRUE) # ... -4.8
 
