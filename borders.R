@@ -12,6 +12,7 @@ library(ggrepel)
 library(grid)
 library(Rcpp)
 png(filename="../../../Desktop/device.png", res = 144, width = 8.5, height = 11, units = "in")
+# png(filename="../../../Desktop/device.png", res = 144, width = 17, height = 22, units = "in")
 
 ## >>>>> 0. create graph
 data("networkEx")
