@@ -9,13 +9,12 @@ library(ggplot2)
 library(ggrepel)
 library(grid)
 library(Rcpp)
-# setwd("~/R-studio/gatom/for_gatom/")
 # m
 
 system.time({ # approx. 12s
 
-source("~/R-studio/gatom/for_gatom/utils.R")
-source("~/R-studio/gatom/for_gatom/force_alg.R")
+source("./utils.R")
+source("./force_alg.R")
 
 # 1.MAKE LAYOUT
 layout1 <- make_layout(m, layout="sna_kk")
@@ -25,7 +24,7 @@ layout1 <- make_layout(m, layout="sna_kk")
 gwidth <- 2 * (max(layout1[,1]) - min(layout1[,1]))
 gheight <- 2 * (max(layout1[,2]) - min(layout1[,2]))
 layout1 <- range01(layout1)
-pdf(file="../../../Desktop/device.pdf", width = gwidth, height = gheight)
+pdf(file="./device.pdf", width = gwidth, height = gheight)
 
 ### >>>>> produce aes
 options(stringsAsFactors = FALSE)
@@ -115,7 +114,7 @@ layout2 <- force_alg(layout1,
                      edges,
                      n_iter = 100, force = 1e-5)
 
-    pdf(file="../../../Desktop/graph.pdf", width = gwidth, height = gheight)
+    pdf(file="./graph.pdf", width = gwidth, height = gheight)
     plot(ggnet2(m, mode = layout2$layouts[[length(layout2$layouts)]], layout.exp = 0.2,
                 size = produce_node_attrs$width, max_size = 25, node.color = produce_node_attrs$color,
                 node.label = V(m)$label, label.size = produce_node_attrs$fontsize, label.color = "grey13", #label.trim = 15,
