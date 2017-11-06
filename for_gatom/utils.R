@@ -2,20 +2,34 @@
 #' @param layout "sna_kk", "igraph_kk" // sorted by preference for use
 make_layout <- function(m, layout = "sna_kk"){
 
-  # produce layout
-  if(layout == "sna_kk"){
-    net <- intergraph::asNetwork(m)
-    xy <- network::as.matrix.network.adjacency(net)
-    layout1 <- gplot.layout.kamadakawai(xy, layout.par = list(niter = 500))
+  ## planarity check
+  # library(RBGL)
+  # boyerMyrvoldPlanarityTest(g <- as_graphnel(m))
+
+  start_layouts <- list()
+  start_layout_inters <- 1
+  n <- 1
+  while(start_layout_inters[length(start_layout_inters)]!=0 & n < 10){
+
+    # produce layout
+    if(layout == "sna_kk"){
+      net <- intergraph::asNetwork(m)
+      xy <- network::as.matrix.network.adjacency(net)
+      layout1 <- gplot.layout.kamadakawai(xy, layout.par = list(niter = 500))
+    }
+    if(layout == "igraph_kk"){
+      layout1 <- layout_with_kk(m)
+    }
+
+    start_layout_inters <- c(start_layout_inters,
+                             n_intersect_segm(store_all_info(m, layout1)$lines_to_check))
+
+    start_layouts[[n]] <- layout1
+    n <- n + 1
   }
 
-  if(layout == "igraph_kk"){layout1 <- layout_with_kk(m)}
-
-  # check the resulting layout for intersections
-  if(n_intersect_segm(store_all_info(m, layout1)$lines_to_check)){
-    make_layout(m)
-  }else(layout1)
-}
+  layout1 <- start_layouts[[which.min(start_layout_inters[-1])]]
+  }
 
 range01 <- function(x){(x-min(x))/(max(x)-min(x))}
 
