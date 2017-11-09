@@ -115,7 +115,7 @@ layout2 <- force_alg(layout1,
                      n_iter = 100, force = 1e-5)
 
     pdf(file="./graph.pdf", width = gwidth, height = gheight)
-    plot(ggnet2(m, mode = layout2$layouts[[length(layout2$layouts)]], layout.exp = 0.2,
+    plot(ggnet2(m, mode = layout2$layouts[[length(layout2$layouts)]], layout.exp = 0.2*(60/length(V(m))),
                 size = produce_node_attrs$width, max_size = 25, node.color = produce_node_attrs$color,
                 node.label = V(m)$label, label.size = produce_node_attrs$fontsize, label.color = "grey13", #label.trim = 15,
                 edge.size = produce_edge_attrs$penwidth, edge.color = produce_edge_attrs$color, edge.label.fill = NA,
